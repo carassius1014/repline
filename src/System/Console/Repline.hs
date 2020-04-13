@@ -8,6 +8,47 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
+--
+-- Alternatively instead of initialising the repl from position arguments you
+-- can pass the 'ReplOpts' record with explicitly named arguments.
+--
+-- > main_alt :: IO ()
+-- > main_alt = evalReplOpts $ ReplOpts
+-- >   { banner           = const (pure ">>> ")
+-- >   , command          = cmd
+-- >   , options          = opts
+-- >   , prefix           = Just ':'
+-- >   , multilineCommand = Nothing
+-- >   , tabComplete      = (Word0 completer)
+-- >   , initialiser      = ini
+-- >   , finaliser        = final
+-- >   }
+--
+-- Putting this in a file we can test out our cow-trek shell.
+--
+-- > $ runhaskell Main.hs
+-- > Welcome!
+-- > >>> <TAB>
+-- > kirk spock mccoy
+-- >
+-- > >>> k<TAB>
+-- > kirk
+-- >
+-- > >>> spam
+-- > "spam"
+-- >
+-- > >>> :say Hello Haskell
+-- >  _______________
+-- > < Hello Haskell >
+-- >  ---------------
+-- >         \   ^__^
+-- >          \  (oo)\_______
+-- >             (__)\       )\/\
+-- >                 ||----w |
+-- >                 ||     ||
+--
+-- See <https://github.com/sdiehl/repline> for more examples.
+
 -- |
 --
 -- Repline exposes an additional monad transformer on top of Haskeline called 'HaskelineT'. It simplifies several
@@ -91,47 +132,6 @@
 --
 -- > main :: IO ()
 -- > main = evalRepl (const . pure $ ">>> ") cmd options (Just ':') (Just "paste") (Word completer) ini final
-
---
--- Alternatively instead of initialising the repl from position arguments you
--- can pass the 'ReplOpts' record with explicitly named arguments.
---
--- > main_alt :: IO ()
--- > main_alt = evalReplOpts $ ReplOpts
--- >   { banner           = const (pure ">>> ")
--- >   , command          = cmd
--- >   , options          = opts
--- >   , prefix           = Just ':'
--- >   , multilineCommand = Nothing
--- >   , tabComplete      = (Word0 completer)
--- >   , initialiser      = ini
--- >   , finaliser        = final
--- >   }
---
--- Putting this in a file we can test out our cow-trek shell.
---
--- > $ runhaskell Main.hs
--- > Welcome!
--- > >>> <TAB>
--- > kirk spock mccoy
--- >
--- > >>> k<TAB>
--- > kirk
--- >
--- > >>> spam
--- > "spam"
--- >
--- > >>> :say Hello Haskell
--- >  _______________
--- > < Hello Haskell >
--- >  ---------------
--- >         \   ^__^
--- >          \  (oo)\_______
--- >             (__)\       )\/\
--- >                 ||----w |
--- >                 ||     ||
---
--- See <https://github.com/sdiehl/repline> for more examples.
 module System.Console.Repline
   ( -- * Repline Monad
     HaskelineT,
@@ -365,6 +365,8 @@ data ReplOpts m = ReplOpts
     multilineCommand :: Maybe String,
     -- | Tab completion function
     tabComplete :: CompleterStyle m,
+    -- | Optional history file location
+    historyFile :: Maybe FilePath,
     -- | Initialiser
     initialiser :: HaskelineT m (),
     -- | Finaliser ( runs on <Ctrl-D> )
@@ -382,6 +384,7 @@ evalReplOpts ReplOpts {..} =
     prefix
     multilineCommand
     tabComplete
+    historyFile
     initialiser
     finaliser
 
@@ -400,18 +403,20 @@ evalRepl ::
   Maybe String ->
   -- | Tab completion function
   CompleterStyle m ->
+  -- | Optional history file location
+  Maybe FilePath ->
   -- | Initialiser
   HaskelineT m a ->
   -- | Finaliser ( runs on Ctrl-D )
   HaskelineT m ExitDecision ->
   m ()
-evalRepl banner cmd opts optsPrefix multiCommand comp initz finalz = runHaskelineT _readline (initz >> monad)
+evalRepl banner cmd opts optsPrefix multiCommand comp historyFile initz finalz = runHaskelineT _readline (initz >> monad)
   where
     monad = replLoop banner cmd opts optsPrefix multiCommand finalz
     _readline =
       H.Settings
         { H.complete = mkCompleter comp,
-          H.historyFile = Just ".history",
+          H.historyFile = historyFile,
           H.autoAddHistory = True
         }
 
